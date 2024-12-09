@@ -1,0 +1,124 @@
+---
+kind: pipeline
+type: docker
+name: sandbox
+
+workspace:
+  base: /drone
+  path: /drone/src
+
+steps:
+  - name: build image
+    image: docker:dind
+    pull: if-not-exists
+    volumes:
+    - name: dockersock
+      path: /var/run/docker.sock
+    environment:
+      GIT_TOKEN: ${GIT_TOKEN}
+    commands:
+      - docker build --rm -t mhealthvn/${DRONE_REPO_NAME}:${DRONE_COMMIT} . --build-arg GIT_COMMIT=${DRONE_COMMIT} --build-arg GIT_BRANCH=${DRONE_BRANCH} --build-arg GIT_TOKEN=${GIT_TOKEN}
+
+  - name: push to registry
+    image: docker:dind
+    pull: if-not-exists
+    volumes:
+    - name: dockersock
+      path: /var/run/docker.sock
+    environment:
+      GIT_TOKEN: ${GIT_TOKEN}
+      DOCKER_USERNAME: 
+        from_secret: DOCKER_USERNAME
+      DOCKER_PASSWORD: 
+        from_secret: DOCKER_PASSWORD        
+    commands:
+      - docker login -u $${DOCKER_USERNAME} -p $${DOCKER_PASSWORD}
+      - docker tag mhealthvn/${DRONE_REPO_NAME}:${DRONE_COMMIT} mhealthvn/${DRONE_REPO_NAME}:${DRONE_BRANCH}
+      - docker push mhealthvn/${DRONE_REPO_NAME}:${DRONE_BRANCH} 
+
+  - name: redeploy service
+    image: sinlead/drone-kubectl
+    pull: if-not-exists
+    settings:
+      kubernetes_server:
+        from_secret: k8s_server
+      kubernetes_cert:
+        from_secret: k8s_cert
+      kubernetes_token:
+        from_secret: k8s_token
+    commands:
+    - kubectl rollout restart deployment ${DRONE_REPO_NAME} -n backend
+
+trigger:
+  branch:
+    - sandbox
+  event:
+    - push
+
+volumes:
+- name: dockersock
+  host:
+    path: /var/run/docker.sock
+
+---
+kind: pipeline
+name: production
+type: docker
+
+workspace:
+  base: /drone
+  path: /drone/src
+
+steps:
+  - name: build image
+    image: docker:dind
+    pull: if-not-exists
+    volumes:
+    - name: dockersock
+      path: /var/run/docker.sock
+    environment:
+      GIT_TOKEN: ${GIT_TOKEN}
+    commands:
+      - docker build --rm -t mhealthvn/${DRONE_REPO_NAME}:${DRONE_COMMIT} . --build-arg GIT_COMMIT=${DRONE_COMMIT} --build-arg GIT_BRANCH=${DRONE_BRANCH} --build-arg GIT_TOKEN=${GIT_TOKEN}
+
+  - name: push to registry
+    image: docker:dind
+    pull: if-not-exists
+    volumes:
+    - name: dockersock
+      path: /var/run/docker.sock
+    environment:
+      GIT_TOKEN: ${GIT_TOKEN}
+      DOCKER_USERNAME: 
+        from_secret: DOCKER_USERNAME
+      DOCKER_PASSWORD: 
+        from_secret: DOCKER_PASSWORD        
+    commands:
+      - docker login -u $${DOCKER_USERNAME} -p $${DOCKER_PASSWORD}
+      - docker tag mhealthvn/${DRONE_REPO_NAME}:${DRONE_COMMIT} mhealthvn/${DRONE_REPO_NAME}:$${DRONE_TAG##v}
+      - docker push mhealthvn/${DRONE_REPO_NAME}:$${DRONE_TAG##v} 
+      - docker rmi mhealthvn/${DRONE_REPO_NAME}:${DRONE_COMMIT}
+
+  - name: git commit new release
+    image: mhealthvn/drone-git-push:staging
+    pull: if-not-exists
+    commands:
+      - /bin/drone-git-push
+      - cd /drone/app/release && git add . && git commit -m "new release" && git push
+    settings:
+      remote: https://github.com/Wellcare/kustomize.git
+      token:
+        from_secret: GIT_TOKEN
+      username: tewnut
+      envsubst: true
+      sub_path: /backend/${DRONE_REPO_NAME}/base
+      images: "mhealthvn/${DRONE_REPO_NAME}:${DRONE_TAG##v}"
+
+volumes:
+- name: dockersock
+  host:
+    path: /var/run/docker.sock
+
+trigger:
+  event:
+    - tag
