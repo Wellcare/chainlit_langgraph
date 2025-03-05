@@ -178,6 +178,7 @@ If other agent had an instruction, please follow it: {instruction}
         print(f"hospital_finder_node response: {response}")
 
         state.update(response)
+        print(f"hospital_finder_node state: {state}")
         return state
 
     async def date_picker_node(self, state: GraphState, config: RunnableConfig) -> GraphState:
@@ -217,6 +218,7 @@ If other agent had an instruction, please follow it: {instruction}
         print(f"date_picker_node response: {response}")
 
         state.update(response)
+        print(f"date_picker_node state: {state}")
         return state
 
 

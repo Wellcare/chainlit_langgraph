@@ -90,7 +90,18 @@ class OdooGPTWorkflow(BaseWorkflow):
             "name": self.name(),
             "messages": [],
             "chat_model": "gpt-4o-mini",
-            "requirements": "",
+            "requirements": """
+General requirements:
+- The UI should be visually appealing and responsive.
+- Fields and sections should be grouped logically to improve usability and readability
+- Implement appropriate views (kanban, list, tree...)  for better visualization of data and workflows.
+- Enable easy access to other related modules or records through contextual links, button boxes... 
+- Add appropriate constraints and validation rules to ensure data accuracy 
+- Provide user-friendly error messages and tooltips for invalid entries or missing information.
+
+Functional requirements:
+-
+""",
             "code_files": [],
             "next": "responder",
         }
